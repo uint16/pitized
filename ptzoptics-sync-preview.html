@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PTZ Color Sync — Preview</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+@import url('vendor/fonts.css');
+
+:root {
+  --bg-0:#06060a;--bg-1:#0b0b12;--bg-2:#101018;--bg-3:#16161f;
+  --bg-4:#1c1c28;--bg-5:#232332;--bg-hover:#282840;
+  --border-0:#1a1a28;--border-1:#242436;--border-2:#2e2e44;
+  --text-1:#eaeaf2;--text-2:#9898b4;--text-3:#606080;
+  --accent:#5b8aff;--accent-dim:#5b8aff30;--accent-soft:#5b8aff14;
+  --green:#3dd68c;--green-dim:#3dd68c40;--green-soft:#3dd68c14;
+  --amber:#f0b429;--amber-dim:#f0b42940;--amber-soft:#f0b42914;
+  --red:#f06060;--red-dim:#f0606040;--red-soft:#f0606014;
+  --r:10px;--r-sm:7px;--r-xs:5px;
+  --font:'Instrument Sans',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',monospace;
+  --sidebar-w:310px;
+}
+
+html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(--text-1);overflow:hidden;-webkit-font-smoothing:antialiased;font-size:13px}
+
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+.header{padding:12px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-0)}
+.header-l{display:flex;align-items:center;gap:12px}
+.logo{width:30px;height:30px;border-radius:var(--r-sm);background:linear-gradient(135deg,var(--accent),#b07cff);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px var(--accent-dim)}
+.header h1{font-size:15px;font-weight:600;letter-spacing:-.3px}
+.header h1 span{color:var(--text-3);font-weight:400;margin-left:4px}
+.header-r{display:flex;gap:6px}
+.main{display:grid;grid-template-columns:1fr var(--sidebar-w);overflow:hidden}
+.cam-panel{overflow-y:auto;padding:16px 20px 40px}
+
+.cam-panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cam-panel-title{font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.7px;display:flex;align-items:center;gap:8px}
+.badge{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:20px;background:var(--accent-soft);color:var(--accent)}
+
+/* Camera Card */
+.cam{background:var(--bg-2);border:1px solid var(--border-0);border-radius:var(--r);margin-bottom:10px;overflow:hidden;position:relative;animation:slideIn .3s ease both}
+.cam:nth-child(1){animation-delay:.05s}.cam:nth-child(2){animation-delay:.1s}.cam:nth-child(3){animation-delay:.15s}.cam:nth-child(4){animation-delay:.2s}
+@keyframes slideIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.cam::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
+.cam.source::before{width:4px}
+
+.cam-top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;gap:8px}
+.cam-top:hover{background:var(--bg-3)}
+.cam-left{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.cam-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green-dim);animation:pulse 2s infinite}
+.cam-dot.off{background:var(--text-3);box-shadow:none;animation:none}
+@keyframes pulse{0%,100%{box-shadow:0 0 6px var(--green-dim)}50%{box-shadow:0 0 12px var(--green-dim),0 0 4px var(--green)}}
+.cam-name{font-weight:600;font-size:13px}.cam-sub{font-size:11px;color:var(--text-3);margin-top:1px}
+.cam-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.cam-ip{font-family:var(--mono);font-size:12px;background:var(--bg-0);border:1px solid var(--border-0);border-radius:var(--r-xs);padding:5px 9px;color:var(--text-2);width:130px;text-align:center}
+.src-tag{font-size:9px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;padding:3px 7px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.expand-arrow{color:var(--text-3);transition:transform .2s}.expanded .expand-arrow{transform:rotate(180deg)}
+
+/* Remove button */
+.cam-remove{width:22px;height:22px;border-radius:4px;border:1px solid transparent;background:transparent;color:var(--text-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.cam-remove:hover{background:var(--red-soft);border-color:var(--red-dim);color:var(--red)}
+
+/* Preview */
+.cam-preview{display:grid;grid-template-columns:repeat(8,1fr);gap:6px 10px;padding:0 16px 12px;border-top:1px solid var(--border-0);padding-top:10px}
+.pv-item{display:flex;flex-direction:column;gap:2px}
+.pv-label{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+.pv-val{font-family:var(--mono);font-size:16px;font-weight:500;line-height:1}
+.pv-val.mm{color:var(--amber)}
+
+/* Expanded body */
+.cam-body{border-top:1px solid var(--border-0)}
+.cam-body-inner{display:grid;grid-template-columns:280px 1fr;gap:0}
+
+/* Viewfinder */
+.viewfinder{background:#000;position:relative;min-height:210px;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border-0)}
+.vf-placeholder{width:100%;height:100%;background:linear-gradient(135deg,#0a1628 0%,#0f0f1a 40%,#141422 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--text-3);font-size:11px}
+.vf-scanline{position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.01) 2px,rgba(255,255,255,.01) 4px);pointer-events:none}
+.vf-cross{position:absolute;top:50%;left:50%;width:30px;height:30px;transform:translate(-50%,-50%)}
+.vf-cross::before,.vf-cross::after{content:'';position:absolute;background:rgba(255,255,255,.12)}
+.vf-cross::before{width:1px;height:100%;left:50%}.vf-cross::after{height:1px;width:100%;top:50%}
+.vf-corner{position:absolute;width:8px;height:8px;border:1px solid rgba(255,255,255,.15)}
+.vf-corner.tl{top:15%;left:15%;border-right:none;border-bottom:none}
+.vf-corner.tr{top:15%;right:15%;border-left:none;border-bottom:none}
+.vf-corner.bl{bottom:15%;left:15%;border-right:none;border-top:none}
+.vf-corner.br{bottom:15%;right:15%;border-left:none;border-top:none}
+.vf-rec{position:absolute;top:8px;right:8px;display:flex;align-items:center;gap:4px;font-size:9px;color:var(--red);font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px}
+.vf-rec-dot{width:6px;height:6px;border-radius:50%;background:var(--red);animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.vf-overlay{position:absolute;bottom:0;left:0;right:0;padding:6px 8px;background:linear-gradient(transparent,rgba(0,0,0,.7));display:flex;justify-content:space-between;align-items:flex-end}
+.vf-badge{font-family:var(--mono);font-size:10px;color:var(--green);background:rgba(0,0,0,.5);padding:2px 6px;border-radius:3px}
+.vf-wb-badge{font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:3px;color:#ffcc66;background:rgba(255,180,60,.15)}
+
+/* PTZ */
+.ptz-controls{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.ctrl-section{border-bottom:1px solid var(--border-0);padding-bottom:8px}
+.ctrl-section:last-child{border-bottom:none;padding-bottom:0}
+.ctrl-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);margin-bottom:6px;display:flex;align-items:center;gap:5px}
+
+.joystick{width:96px;height:96px;border-radius:50%;background:var(--bg-0);border:2px solid var(--border-1);position:relative;margin:0 auto}
+.joy-btn{position:absolute;width:26px;height:26px;border-radius:50%;background:var(--bg-4);border:1px solid var(--border-1);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;color:var(--text-2);font-size:9px}
+.joy-btn:hover{background:var(--accent);color:white;border-color:var(--accent)}
+.joy-btn.up{top:-2px;left:50%;transform:translateX(-50%)}
+.joy-btn.down{bottom:-2px;left:50%;transform:translateX(-50%)}
+.joy-btn.left{left:-2px;top:50%;transform:translateY(-50%)}
+.joy-btn.right{right:-2px;top:50%;transform:translateY(-50%)}
+.joy-btn.home{top:50%;left:50%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:4px;font-size:8px}
+.joy-speed{display:flex;align-items:center;gap:6px;justify-content:center;margin-top:6px}
+.joy-speed label{font-size:10px;color:var(--text-3)}
+.joy-speed input{width:65px}
+.zf-btns{display:flex;gap:4px}.zf-btns button{flex:1}
+
+/* IWB */
+.iwb-panel{border-top:1px solid var(--border-0);padding:10px 14px;background:var(--bg-1)}
+.iwb-result{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px}
+.iwb-card{background:var(--bg-3);border-radius:var(--r-xs);padding:7px 8px;text-align:center}
+.iwb-card .num{font-family:var(--mono);font-size:17px;font-weight:600;line-height:1}
+.iwb-card .num.warm{color:#ffcc66}.iwb-card .lbl{font-size:9px;color:var(--text-3);margin-top:2px;text-transform:uppercase;letter-spacing:.3px}
+.iwb-suggestion{margin-top:8px;padding:7px 10px;border-radius:var(--r-xs);font-size:11px;line-height:1.5;display:flex;align-items:flex-start;gap:6px;background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-dim)}
+
+/* Image controls */
+.img-controls{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;padding:10px 14px;border-top:1px solid var(--border-0)}
+.ic-group{display:flex;flex-direction:column;gap:3px}
+.ic-head{display:flex;justify-content:space-between;align-items:center}
+.ic-label{font-size:11px;font-weight:600;color:var(--text-2)}
+.ic-val{font-family:var(--mono);font-size:11px;color:var(--text-1)}
+.ic-group select{font-family:var(--font);font-size:12px;padding:4px 8px;background:var(--bg-0);border:1px solid var(--border-0);border-radius:var(--r-xs);color:var(--text-1);-webkit-appearance:none}
+
+/* Add Camera */
+.add-cam{background:var(--bg-2);border:2px dashed var(--border-1);border-radius:var(--r);padding:14px 16px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:all .15s;color:var(--text-3);font-size:13px;font-weight:500;margin-bottom:10px}
+.add-cam:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+
+/* Buttons */
+.btn{font-family:var(--font);font-size:12px;font-weight:500;padding:5px 10px;border-radius:var(--r-xs);border:1px solid var(--border-1);background:var(--bg-4);color:var(--text-1);cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.btn:hover{background:var(--bg-hover);border-color:var(--border-2)}.btn:active{transform:scale(.97)}
+.btn-xs{font-size:11px;padding:3px 7px}
+.btn-accent{background:var(--accent);border-color:var(--accent);color:#fff}.btn-accent:hover{background:#4a78ee}
+.btn-green{background:var(--green-soft);border-color:var(--green-dim);color:var(--green)}.btn-green:hover{background:var(--green);color:#fff}
+
+input[type=range]{-webkit-appearance:none;width:100%;height:3px;background:var(--bg-0);border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);border:2px solid var(--bg-1);box-shadow:0 1px 5px var(--accent-dim);cursor:pointer}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+.sidebar{border-left:1px solid var(--border-0);background:var(--bg-1);display:flex;flex-direction:column;overflow-y:auto}
+.sb-section{padding:14px 16px;border-bottom:1px solid var(--border-0)}
+.sb-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+
+/* Sync Targets */
+.st-list{display:flex;flex-direction:column;gap:4px}
+.st-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:var(--r-xs);background:var(--bg-0);border:1px solid var(--border-0);font-size:12px;transition:all .12s}
+.st-item.active{border-color:color-mix(in srgb, var(--c) 25%, transparent)}
+.st-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.st-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-role{font-size:9px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;padding:1px 5px;border-radius:3px;flex-shrink:0}
+.st-role.src{background:var(--accent-soft);color:var(--accent)}
+.st-role.tgt{background:var(--green-soft);color:var(--green)}
+.st-role.off{background:var(--bg-3);color:var(--text-3)}
+.st-role.skip{background:var(--bg-3);color:var(--text-3)}
+.st-check{width:16px;height:16px;border-radius:3px;border:2px solid var(--border-2);background:var(--bg-0);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0}
+.st-check.checked{background:var(--green);border-color:var(--green)}
+.st-check.checked::after{content:'';width:4px;height:7px;border:solid white;border-width:0 1.5px 1.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
+
+.cg{margin-bottom:10px}.cg:last-child{margin-bottom:0}
+.cg-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.cg-label{font-size:12px;font-weight:500;color:var(--text-2)}
+.cg-val{font-family:var(--mono);font-size:12px;color:var(--text-1)}
+.cg select{font-family:var(--font);font-size:12px;width:100%;padding:5px 10px;background:var(--bg-0);border:1px solid var(--border-0);border-radius:var(--r-xs);color:var(--text-1);-webkit-appearance:none}
+
+.sync-area{margin-top:auto;padding:14px 16px;border-top:1px solid var(--border-0)}
+.sync-btn{width:100%;padding:11px;font-size:13px;font-weight:700;border-radius:var(--r-sm);border:none;background:linear-gradient(135deg,var(--accent),#b07cff);color:#fff;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s}
+.sync-btn:hover{box-shadow:0 4px 18px var(--accent-dim);transform:translateY(-1px)}
+.status-line{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px;margin-top:8px}
+.status-dot{width:5px;height:5px;border-radius:50%;background:var(--green)}
+
+.mm-bar{margin:0 0 10px;padding:8px 12px;background:var(--amber-soft);border:1px solid var(--amber-dim);border-radius:var(--r-xs);font-size:11px;color:var(--amber);display:flex;align-items:center;gap:6px}
+
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border-1);border-radius:3px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="header-l">
+      <div class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></div>
+      <h1>Color Sync<span>PTZOptics</span></h1>
+    </div>
+    <div class="header-r">
+      <button class="btn btn-xs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Discover</button>
+      <button class="btn btn-xs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 22v-6h6"/><path d="M3 11.5a9 9 0 0 1 16.5-4M21 12.5a9 9 0 0 1-16.5 4"/></svg> Refresh</button>
+    </div>
+  </div>
+  <div class="main">
+    <div class="cam-panel">
+      <div class="cam-panel-head">
+        <div class="cam-panel-title">Cameras <span class="badge">4 connected</span></div>
+        <div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;color:var(--text-3)">Source:</span><span style="font-size:11px;color:#5b8aff;font-weight:600">Stage Left</span></div>
+      </div>
+      <div class="mm-bar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>3 settings differ — sync to match</div>
+
+      <!-- Camera 1: Source, collapsed -->
+      <div class="cam source" style="--c:#5b8aff">
+        <div class="cam-top">
+          <div class="cam-left"><div class="cam-dot"></div><div><div class="cam-name">Stage Left</div><div class="cam-sub">PTZOptics Move SE 20x</div></div></div>
+          <div class="cam-right">
+            <span class="src-tag">Source</span>
+            <span class="cam-ip">192.168.1.100</span>
+            <button class="btn btn-xs">Disconnect</button>
+            <svg class="expand-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <button class="cam-remove"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </div>
+        </div>
+        <div class="cam-preview">
+          <div class="pv-item"><span class="pv-label">WB</span><span class="pv-val">Manual</span></div>
+          <div class="pv-item"><span class="pv-label">Red</span><span class="pv-val">128</span></div>
+          <div class="pv-item"><span class="pv-label">Blue</span><span class="pv-val">128</span></div>
+          <div class="pv-item"><span class="pv-label">Sat</span><span class="pv-val">128</span></div>
+          <div class="pv-item"><span class="pv-label">Brt</span><span class="pv-val">128</span></div>
+          <div class="pv-item"><span class="pv-label">Con</span><span class="pv-val">128</span></div>
+          <div class="pv-item"><span class="pv-label">Hue</span><span class="pv-val">128</span></div>
+          <div class="pv-item"><span class="pv-label">Shp</span><span class="pv-val">6</span></div>
+        </div>
+      </div>
+
+      <!-- Camera 2: Target, collapsed -->
+      <div class="cam" style="--c:#b07cff">
+        <div class="cam-top">
+          <div class="cam-left"><div class="cam-dot"></div><div><div class="cam-name">Stage Right</div><div class="cam-sub">PTZOptics Move SE 20x</div></div></div>
+          <div class="cam-right">
+            <button class="btn btn-xs">Set Source</button>
+            <span class="cam-ip">192.168.1.101</span>
+            <button class="btn btn-xs">Disconnect</button>
+            <svg class="expand-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <button class="cam-remove"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </div>
+        </div>
+        <div class="cam-preview">
+          <div class="pv-item"><span class="pv-label">WB</span><span class="pv-val">Manual</span></div>
+          <div class="pv-item"><span class="pv-label">Red</span><span class="pv-val mm">142</span></div>
+          <div class="pv-item"><span class="pv-label">Blue</span><span class="pv-val mm">118</span></div>
+          <div class="pv-item"><span class="pv-label">Sat</span><span class="pv-val">128</span></div>
+          <div class="pv-item"><span class="pv-label">Brt</span><span class="pv-val mm">135</span></div>
+          <div class="pv-item"><span class="pv-label">Con</span><span class="pv-val">128</span></div>
+          <div class="pv-item"><span class="pv-label">Hue</span><span class="pv-val">128</span></div>
+          <div class="pv-item"><span class="pv-label">Shp</span><span class="pv-val">6</span></div>
+        </div>
+      </div>
+
+      <!-- Camera 3: Expanded with viewfinder -->
+      <div class="cam expanded" style="--c:#3dd68c">
+        <div class="cam-top">
+          <div class="cam-left"><div class="cam-dot"></div><div><div class="cam-name">Audience Wide</div><div class="cam-sub">PTZOptics Move SE 20x</div></div></div>
+          <div class="cam-right">
+            <button class="btn btn-xs">Set Source</button>
+            <span class="cam-ip">192.168.1.102</span>
+            <button class="btn btn-xs">Disconnect</button>
+            <svg class="expand-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <button class="cam-remove"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </div>
+        </div>
+        <div class="cam-body">
+          <div class="cam-body-inner">
+            <div style="display:flex;flex-direction:column">
+              <div class="viewfinder">
+                <div class="vf-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Live Feed</div>
+                <div class="vf-scanline"></div><div class="vf-cross"></div>
+                <div class="vf-corner tl"></div><div class="vf-corner tr"></div><div class="vf-corner bl"></div><div class="vf-corner br"></div>
+                <div class="vf-rec"><div class="vf-rec-dot"></div>LIVE</div>
+                <div class="vf-overlay"><span class="vf-badge">4.2 fps</span><span class="vf-wb-badge">4200K</span></div>
+              </div>
+              <div class="ptz-controls">
+                <div class="ctrl-section"><div class="ctrl-title"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l7-7 7 7M5 15l7 7 7-7"/></svg> Pan / Tilt</div>
+                  <div class="joystick"><div class="joy-btn up">▲</div><div class="joy-btn down">▼</div><div class="joy-btn left">◄</div><div class="joy-btn right">►</div><div class="joy-btn home">⌂</div></div>
+                  <div class="joy-speed"><label>Speed</label><input type="range" min="1" max="20" value="8"></div>
+                </div>
+                <div class="ctrl-section"><div class="ctrl-title"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg> Zoom (20×)</div>
+                  <div class="zf-btns"><button class="btn btn-xs" style="flex:1">− Wide</button><button class="btn btn-xs" style="flex:1">+ Tele</button></div>
+                </div>
+                <div class="ctrl-section" style="border-bottom:none"><div class="ctrl-title"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> Focus</div>
+                  <div style="display:flex;gap:6px;margin-bottom:5px"><select class="btn btn-xs" style="border:1px solid var(--border-1);padding:3px 7px;background:var(--bg-4)"><option>Auto</option></select></div>
+                  <div class="zf-btns"><button class="btn btn-xs" style="flex:1">Near</button><button class="btn btn-xs" style="flex:1">Far</button></div>
+                </div>
+              </div>
+            </div>
+            <div style="overflow-y:auto;max-height:520px">
+              <div class="iwb-panel">
+                <div class="ctrl-title" style="margin-bottom:0"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 3v1m0 16v1m-8-9H3m18 0h-1"/></svg>Intelligent White Balance<button class="btn btn-xs btn-green">Analyze Feed</button></div>
+                <div class="iwb-result">
+                  <div class="iwb-card"><div class="num warm">4200K</div><div class="lbl">Est. Kelvin</div></div>
+                  <div class="iwb-card"><div class="num" style="color:var(--red)">+12%</div><div class="lbl">Red Shift</div></div>
+                  <div class="iwb-card"><div class="num" style="color:var(--accent)">-8%</div><div class="lbl">Blue Shift</div></div>
+                </div>
+                <div class="iwb-suggestion"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg><div>Warm cast. Red 118 (−10), Blue 134 (+6) <button class="btn btn-xs btn-accent" style="margin-left:6px">Apply</button><button class="btn btn-xs" style="margin-left:3px">Apply to Selected</button></div></div>
+              </div>
+              <div class="img-controls">
+                <div class="ic-group"><div class="ic-head"><span class="ic-label">WB Mode</span></div><select><option>Auto</option><option>Indoor</option><option>Outdoor</option><option>One Push</option><option selected>Manual</option></select></div>
+                <div class="ic-group"><div class="ic-head"><span class="ic-label">Exposure</span></div><select><option selected>Auto</option><option>Manual</option></select></div>
+                <div class="ic-group"><div class="ic-head"><span class="ic-label">Red Gain</span><span class="ic-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+                <div class="ic-group"><div class="ic-head"><span class="ic-label">Blue Gain</span><span class="ic-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+                <div class="ic-group"><div class="ic-head"><span class="ic-label">Saturation</span><span class="ic-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+                <div class="ic-group"><div class="ic-head"><span class="ic-label">Brightness</span><span class="ic-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+                <div class="ic-group"><div class="ic-head"><span class="ic-label">Contrast</span><span class="ic-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+                <div class="ic-group"><div class="ic-head"><span class="ic-label">Hue</span><span class="ic-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+                <div class="ic-group"><div class="ic-head"><span class="ic-label">Sharpness</span><span class="ic-val">6</span></div><input type="range" min="0" max="15" value="6"></div>
+                <div class="ic-group"><div class="ic-head"><span class="ic-label">Gain</span><span class="ic-val">4</span></div><input type="range" min="0" max="15" value="4"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Camera 4: Not connected -->
+      <div class="cam" style="--c:#f0b429">
+        <div class="cam-top">
+          <div class="cam-left"><div class="cam-dot off"></div><div><div class="cam-name">Balcony</div><div class="cam-sub">Not connected</div></div></div>
+          <div class="cam-right">
+            <input class="cam-ip" placeholder="192.168.1.103" value="" style="border-style:dashed">
+            <button class="btn btn-xs">Connect</button>
+            <button class="cam-remove"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add Camera Button -->
+      <div class="add-cam">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Camera
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <!-- Sync Targets Section -->
+      <div class="sb-section">
+        <div class="sb-title"><span>Sync Targets</span><span style="display:flex;gap:4px"><button class="btn btn-xs" style="padding:2px 6px;font-size:10px">All</button><button class="btn btn-xs" style="padding:2px 6px;font-size:10px">None</button></span></div>
+        <div class="st-list">
+          <div class="st-item active" style="--c:#5b8aff"><div class="st-dot" style="background:#5b8aff"></div><span class="st-name">Stage Left</span><span class="st-role src">Source</span></div>
+          <div class="st-item active" style="--c:#b07cff"><div class="st-dot" style="background:#b07cff"></div><span class="st-name">Stage Right</span><span class="st-role tgt">Target</span><div class="st-check checked"></div></div>
+          <div class="st-item active" style="--c:#3dd68c"><div class="st-dot" style="background:#3dd68c"></div><span class="st-name">Audience Wide</span><span class="st-role tgt">Target</span><div class="st-check checked"></div></div>
+          <div class="st-item" style="--c:#f0b429"><div class="st-dot" style="background:var(--text-3)"></div><span class="st-name">Balcony</span><span class="st-role off">Offline</span></div>
+        </div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-title"><span>Sync Settings</span></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">WB Mode</span></div><select><option>Auto</option><option>Indoor</option><option>Outdoor</option><option>One Push</option><option selected>Manual</option></select></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Red Gain</span><span class="cg-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Blue Gain</span><span class="cg-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-title"><span>Image</span></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Saturation</span><span class="cg-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Brightness</span><span class="cg-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Contrast</span><span class="cg-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Hue</span><span class="cg-val">128</span></div><input type="range" min="0" max="255" value="128"></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Sharpness</span><span class="cg-val">6</span></div><input type="range" min="0" max="15" value="6"></div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-title"><span>Exposure</span></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Mode</span></div><select><option selected>Auto</option><option>Manual</option></select></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Gain</span><span class="cg-val">4</span></div><input type="range" min="0" max="15" value="4"></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Backlight</span></div><select><option selected>Off</option><option>On</option></select></div>
+      </div>
+      <div class="sb-section" style="border-bottom:none">
+        <div class="sb-title"><span>Noise Reduction</span></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">NR 2D</span><span class="cg-val">3</span></div><input type="range" min="0" max="5" value="3"></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">NR 3D</span><span class="cg-val">3</span></div><input type="range" min="0" max="8" value="3"></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">WDR</span></div><select><option selected>Off</option><option>On</option></select></div>
+      </div>
+      <div class="sync-area">
+        <button class="sync-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2v6h-6M3 22v-6h6"/><path d="M3 11.5a9 9 0 0 1 16.5-4M21 12.5a9 9 0 0 1-16.5 4"/></svg>
+          Sync to 2 Cameras
+        </button>
+        <div class="status-line"><span class="status-dot"></span>Stage Left → Stage Right, Audience Wide</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
