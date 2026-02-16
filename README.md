@@ -2,7 +2,19 @@
 
 A desktop PTZ camera controller built with Electron. Manage multiple cameras from a single interface with live feeds, AI-powered subject tracking, and multi-camera settings synchronization.
 
+**Download:** [Latest Release](https://github.com/uint16/pitized/releases/latest) — macOS (Apple Silicon & Intel) and Windows builds available.
+
+Light and dark themes included — toggle with the theme button in the header.
+
+| Light Mode | Dark Mode |
+|:---:|:---:|
+| ![Light mode](resources/screenshot-light.png) | ![Dark mode](resources/screenshot-dark.png) |
+
 ## Features
+
+### Mock Camera Mode
+- Try the full UI without any hardware — built-in mock camera simulates PTZ responses
+- Great for exploring features, development, and demos
 
 ### Multi-Camera Management
 - Add, remove, and rename cameras by IP address
