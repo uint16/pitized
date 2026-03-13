@@ -1,6 +1,6 @@
 {
   "name": "pitized",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "PiTiZed Camera Color & White Balance Sync",
   "main": "src/main.js",
   "scripts": {
