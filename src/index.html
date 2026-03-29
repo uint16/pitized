@@ -198,6 +198,9 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .iwb-suggestion{margin-top:10px;padding:8px 12px;border-radius:var(--r-xs);font-size:12px;line-height:1.5;display:flex;align-items:center;gap:8px}
 .iwb-suggestion.adjust{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-dim)}
 .iwb-suggestion.good{background:var(--green-soft);color:var(--green);border:1px solid var(--green-dim)}
+.iwb-preview-btn{position:relative}.iwb-preview-btn.active{background:var(--accent-soft)!important;border-color:var(--accent)!important;color:var(--accent)!important}
+.vf-preview-badge{position:absolute;top:6px;left:6px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:.4px;pointer-events:none;display:none}
+.vf-preview-badge.vis{display:block}
 
 /* Tracking */
 .track-panel{border-top:1px solid var(--border-0);padding:12px 16px;background:var(--bg-2)}
@@ -601,6 +604,7 @@ function renderExpanded(c, i) {
       <div class="viewfinder" id="vf-${i}">
         <img id="vf-img-${i}" style="display:none">
         <div class="vf-placeholder" id="vf-ph-${i}">Loading feed…</div>
+        <div class="vf-preview-badge" id="vf-pre-${i}">PREVIEW</div>
         <div class="vf-overlay">
           <span class="vf-badge" id="vf-fps-${i}">—</span>
           <div class="vf-actions">
@@ -1145,7 +1149,11 @@ function getAuth(i) {
 function ptzCmd(i, cmd) { const spd = $(`ptz-spd-${i}`)?.value || 8; window.ptz.ptz(cams[i].ip, cmd, spd, spd, getAuth(i)); }
 function zoomCmd(i, dir) { window.ptz.zoom(cams[i].ip, dir, 3, getAuth(i)); }
 function focusCmd(i, cmd) { window.ptz.focus(cams[i].ip, cmd, getAuth(i)); }
-function setFocusMode(i, val) { window.ptz.setImageValue(cams[i].ip, 'focusmode', val, getAuth(i)); cams[i].cfg.focus_mode = Number(val); }
+function setFocusMode(i, val) {
+  window.ptz.setImageValue(cams[i].ip, 'focusmode', val, getAuth(i));
+  cams[i].cfg.focus_mode = Number(val);
+  scheduleSettingsRefresh(i);
+}
 
 // ── Presets ──────────────────────────────────────────────────────────────────
 async function callPreset(i, n) {
@@ -1172,15 +1180,33 @@ const API_PARAM = {
   scene_mode:'scene', focusmode:'focusmode', colortemp:'colortemp',
   expcomp_mode:'expcomp_mode', expcomp_level:'expcomp_level', meter:'meter'
 };
+// ── Deferred settings re-read ─────────────────────────────────────────────────
+// After any write, re-read from camera 800 ms later so cams[i].cfg reflects ground
+// truth before the next render. Debounced per-camera so rapid slider changes only
+// trigger one read.
+const cfgRefreshTimers = {};
+function scheduleSettingsRefresh(i) {
+  const camId = cams[i].id;
+  if (cfgRefreshTimers[camId]) clearTimeout(cfgRefreshTimers[camId]);
+  cfgRefreshTimers[camId] = setTimeout(async () => {
+    delete cfgRefreshTimers[camId];
+    if (!cams[i]?.on) return;
+    const r = await window.ptz.getSettings(cams[i].ip, getAuth(i));
+    if (r.success) cams[i].cfg = r.config;
+  }, 800);
+}
+
 function setCamImg(i, k, v) {
   const apiKey = API_PARAM[k] || k;
   window.ptz.setImageValue(cams[i].ip, apiKey, v, getAuth(i));
   cams[i].cfg[k] = Number(v);
+  scheduleSettingsRefresh(i);
 }
 function setCamExp(i, k, v) {
   const apiKey = API_PARAM[k] || k;
   window.ptz.setImageValue(cams[i].ip, apiKey, v, getAuth(i));
   cams[i].cfg[k] = Number(v);
+  scheduleSettingsRefresh(i);
 }
 
 // ── Snapshot feed ────────────────────────────────────────────────────────────
@@ -1196,9 +1222,11 @@ function startSnapshot(i) {
     const img = $(`vf-img-${i}`), ph = $(`vf-ph-${i}`), fps = $(`vf-fps-${i}`);
     if (r.success && img) {
       const mime = r.mime || 'image/jpeg';
-      img.src = `data:${mime};base64,` + r.data;
-      img.style.display = 'block';
-      if (ph) ph.style.display = 'none';
+      if (!wbPreview[camId]?.active) {
+        img.src = `data:${mime};base64,` + r.data;
+        img.style.display = 'block';
+        if (ph) ph.style.display = 'none';
+      }
       frame++;
       fails = 0;
       const elapsed = (Date.now() - t0) / 1000;
@@ -1590,6 +1618,44 @@ async function takeSnapshot(i) {
 }
 
 // ── Intelligent White Balance ────────────────────────────────────────────────
+const wbPreview = {}; // camId → { active, rMult, bMult }
+
+function previewWB(i, rMult, bMult) {
+  const c = cams[i];
+  const img = $(`vf-img-${i}`);
+  const badge = $(`vf-pre-${i}`);
+  const btn = $(`iwb-sug-${i}`)?.querySelector('.iwb-preview-btn');
+
+  if (wbPreview[c.id]?.active) {
+    // Cancel preview — live feed naturally resumes from snapshot loop
+    delete wbPreview[c.id];
+    if (badge) badge.classList.remove('vis');
+    if (btn) { btn.textContent = 'Preview'; btn.classList.remove('active'); }
+    return;
+  }
+
+  if (!img || img.style.display === 'none') { toast('No feed to preview', 'warn'); return; }
+
+  // Draw current frame to canvas and apply per-channel correction
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || 320;
+  canvas.height = img.naturalHeight || 240;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = id.data;
+  for (let px = 0; px < d.length; px += 4) {
+    d[px]   = Math.min(255, Math.round(d[px]   * rMult));
+    d[px+2] = Math.min(255, Math.round(d[px+2] * bMult));
+  }
+  ctx.putImageData(id, 0, 0);
+  img.src = canvas.toDataURL('image/jpeg', 0.92);
+
+  wbPreview[c.id] = { active: true };
+  if (badge) badge.classList.add('vis');
+  if (btn) { btn.textContent = 'Live'; btn.classList.add('active'); }
+}
+
 async function analyzeWB(i) {
   const img = $(`vf-img-${i}`);
   if (!img || !img.src || img.style.display === 'none') { toast('No feed — connect camera first', 'warn'); return; }
@@ -1640,22 +1706,40 @@ async function analyzeWB(i) {
   const sugEl = $(`iwb-sug-${i}`);
   const currentRed = cams[i].cfg.red_gain ?? cams[i].cfg.rgain ?? 128, currentBlue = cams[i].cfg.blue_gain ?? cams[i].cfg.bgain ?? 128;
 
+  // Cancel any active preview since we have fresh analysis
+  if (wbPreview[cams[i].id]?.active) {
+    delete wbPreview[cams[i].id];
+    const badge = $(`vf-pre-${i}`);
+    if (badge) badge.classList.remove('vis');
+  }
+
   if (Math.abs(redShift) <= 3 && Math.abs(blueShift) <= 3) {
     sugEl.innerHTML = `<div class="iwb-suggestion good"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>White balance looks neutral</div>`;
   } else {
     const redAdj = Math.round(-redShift * 0.8), blueAdj = Math.round(-blueShift * 0.8);
     const newRed = Math.max(0, Math.min(255, currentRed + redAdj));
     const newBlue = Math.max(0, Math.min(255, currentBlue + blueAdj));
+    // Correction multipliers: neutral/channel → pushes channel toward neutral
+    const rMult = rAvg > 0 ? (neutral / rAvg).toFixed(4) : 1;
+    const bMult = bAvg > 0 ? (neutral / bAvg).toFixed(4) : 1;
     sugEl.innerHTML = `<div class="iwb-suggestion adjust">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
       <div>${cct<4500?'Warm':'Cool'} cast. Red ${newRed} (${redAdj>0?'+':''}${redAdj}), Blue ${newBlue} (${blueAdj>0?'+':''}${blueAdj})
-      <button class="btn btn-xs btn-accent" style="margin-left:6px" onclick="applyWBSuggestion(${i},${newRed},${newBlue})">Apply</button>
+      <button class="btn btn-xs iwb-preview-btn" style="margin-left:6px" onclick="previewWB(${i},${rMult},${bMult})">Preview</button>
+      <button class="btn btn-xs btn-accent" style="margin-left:3px" onclick="applyWBSuggestion(${i},${newRed},${newBlue})">Apply</button>
       <button class="btn btn-xs" style="margin-left:3px" onclick="applyWBToSelected(${newRed},${newBlue})">Apply to Selected</button></div></div>`;
   }
   toast('WB analysis complete', 'ok');
 }
 
 function applyWBSuggestion(i, red, blue) {
+  // Cancel preview first so live feed resumes immediately after apply
+  const camId = cams[i].id;
+  if (wbPreview[camId]?.active) {
+    delete wbPreview[camId];
+    const badge = $(`vf-pre-${i}`);
+    if (badge) badge.classList.remove('vis');
+  }
   // Manual WB mode=5, then set rgain/bgain (0-255)
   window.ptz.setImageValue(cams[i].ip, 'wbmode', 5, getAuth(i));
   window.ptz.setImageValue(cams[i].ip, 'rgain', red, getAuth(i));

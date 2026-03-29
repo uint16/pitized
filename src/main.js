@@ -302,6 +302,30 @@ function parse(raw) {
   return r;
 }
 
+// Cameras may return write-side key names (wbmode, aemode, etc.) from their read
+// endpoints, or use underscore variants — normalize everything to the UI-expected names.
+const CAMERA_KEY_NORMALIZE = {
+  wbmode:       'wb_mode',
+  aemode:       'exposure_mode',
+  luminance:    'bright',
+  antiflicker:  'anti_flicker',
+  noise2d:      'nr2d',
+  focusmode:    'focus_mode',
+  rgain:        'red_gain',
+  bgain:        'blue_gain',
+};
+
+function normalizeConfig(cfg) {
+  const out = { ...cfg };
+  for (const [from, to] of Object.entries(CAMERA_KEY_NORMALIZE)) {
+    if (from in out && !(to in out)) {
+      out[to] = out[from];
+      delete out[from];
+    }
+  }
+  return out;
+}
+
 /* ── Connect & fetch all config ───────────────────────────────────────────── */
 ipcMain.handle('camera:connect', async (_, ip, auth = null) => {
   console.log('[camera:connect] Attempting to connect to:', ip, auth ? '(with auth)' : '(no auth)');
@@ -342,9 +366,11 @@ ipcMain.handle('camera:connect', async (_, ip, auth = null) => {
     }
 
     console.log('[camera:connect] Successfully connected to:', ip);
+    const rawConfig = { ...parse(img), ...parse(exp), ...parse(foc) };
+    console.log('[camera:connect] Raw config keys:', Object.keys(rawConfig).join(', '));
     return { success: true,
       info: { model: info.device_model || info.model || 'PTZOptics Move SE', serial: info.serial_number || info.sn || 'N/A', firmware: info.firmware_version || info.fw || 'N/A' },
-      config: { ...parse(img), ...parse(exp), ...parse(foc) }
+      config: normalizeConfig(rawConfig)
     };
   } catch (err) {
     return { success: false, error: err.message || 'Connection failed' };
@@ -359,7 +385,7 @@ ipcMain.handle('camera:getSettings', async (_, ip, auth = null) => {
       httpGet(ip, '/cgi-bin/param.cgi?get_exposure_conf', 4000, auth).catch(() => ''),
       httpGet(ip, '/cgi-bin/param.cgi?get_focus_conf', 4000, auth).catch(() => '')
     ]);
-    return { success: true, config: { ...parse(img), ...parse(exp), ...parse(foc) } };
+    return { success: true, config: normalizeConfig({ ...parse(img), ...parse(exp), ...parse(foc) }) };
   } catch (err) { return { success: false, error: err.message }; }
 });
 
@@ -648,9 +674,20 @@ ipcMain.handle('camera:setAudioParam', async (_, ip, params, auth = null) => {
   } catch (err) { return { success: false, error: err.message }; }
 });
 
+// Maps G3 write-key names → read-key names returned by get_image_conf / get_exposure_conf / get_focus_conf
+const WRITE_TO_READ_KEY = {
+  wbmode: 'wb_mode', aemode: 'exposure_mode', luminance: 'bright',
+  antiflicker: 'anti_flicker', noise2d: 'nr2d', focusmode: 'focus_mode',
+  rgain: 'red_gain', bgain: 'blue_gain'
+};
+
 ipcMain.handle('camera:setImageValue', async (_, ip, param, value, auth = null) => {
   try {
-    if (ip === 'mock') return { success: true };
+    if (ip === 'mock') {
+      const readKey = WRITE_TO_READ_KEY[param] || param;
+      MOCK_DATA.config[readKey] = Number(value);
+      return { success: true };
+    }
     await httpGet(ip, `/cgi-bin/ptzctrl.cgi?post_image_value&${param}&${value}`, 4000, auth);
     return { success: true };
   } catch (err) { return { success: false, error: err.message }; }
