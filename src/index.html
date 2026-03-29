@@ -297,6 +297,17 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15)}
 @keyframes tOut{to{opacity:0;transform:translateY(-4px)}}
 
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border-1);border-radius:3px}
+
+/* ── Presets ──────────────────────────────────────────────────────────────── */
+.preset-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:6px}
+.preset-slot{display:flex;flex-direction:column;gap:2px}
+.preset-slot.preset-zero{grid-column:2}
+.preset-call{width:100%;padding:7px 4px;font-size:13px;font-weight:700;background:var(--bg-3);border:1px solid var(--border-1);border-radius:var(--r-xs);color:var(--text-1);cursor:pointer;font-family:var(--mono);transition:all .1s;text-align:center}
+.preset-call:hover{background:var(--bg-hover);border-color:var(--accent);color:var(--accent)}
+.preset-call:active,.preset-call.flash{background:var(--accent-soft);border-color:var(--accent);transform:scale(.95)}
+.preset-set{width:100%;padding:2px 4px;font-size:9px;font-weight:600;background:transparent;border:1px solid var(--border-0);border-radius:var(--r-xs);color:var(--text-3);cursor:pointer;letter-spacing:.3px;transition:all .1s;font-family:var(--font)}
+.preset-set:hover{border-color:var(--amber);color:var(--amber)}
+.preset-set:active{background:var(--amber-soft)}
 </style>
 <!-- TensorFlow.js & Coco-SSD -->
 <script src="../vendor/tf.js"></script>
@@ -634,7 +645,7 @@ function renderExpanded(c, i) {
             <button class="btn btn-xs btn-zoom-in" onmousedown="zoomCmd(${i},'zoomin')" onmouseup="zoomCmd(${i},'zoomstop')" onmouseleave="zoomCmd(${i},'zoomstop')">+ Tele</button>
           </div>
         </div>
-        <div class="ctrl-section" style="border-bottom:none">
+        <div class="ctrl-section">
           <div class="ctrl-title"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> Focus</div>
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
             <select class="btn btn-xs" style="border:1px solid var(--border-1);padding:3px 7px" onchange="setFocusMode(${i},this.value)">
@@ -645,6 +656,20 @@ function renderExpanded(c, i) {
           <div class="zf-btns">
             <button class="btn btn-xs btn-focus-in" onmousedown="focusCmd(${i},'focusin')" onmouseup="focusCmd(${i},'focusstop')" onmouseleave="focusCmd(${i},'focusstop')">Near</button>
             <button class="btn btn-xs btn-focus-out" onmousedown="focusCmd(${i},'focusout')" onmouseup="focusCmd(${i},'focusstop')" onmouseleave="focusCmd(${i},'focusstop')">Far</button>
+          </div>
+        </div>
+        <div class="ctrl-section" style="border-bottom:none">
+          <div class="ctrl-title"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="10" y="3" width="4" height="4" rx="1"/><rect x="17" y="3" width="4" height="4" rx="1"/><rect x="3" y="10" width="4" height="4" rx="1"/><rect x="10" y="10" width="4" height="4" rx="1"/><rect x="17" y="10" width="4" height="4" rx="1"/><rect x="3" y="17" width="4" height="4" rx="1"/><rect x="10" y="17" width="4" height="4" rx="1"/><rect x="17" y="17" width="4" height="4" rx="1"/></svg> Presets <span style="font-size:10px;color:var(--text-3);font-weight:400">(click=call · set=save)</span></div>
+          <div class="preset-grid">
+            ${[7,8,9,4,5,6,1,2,3].map(n=>`
+            <div class="preset-slot">
+              <button class="preset-call" id="pre-${i}-${n}" onclick="callPreset(${i},${n})" title="Call preset ${n} (key ${n})">${n}</button>
+              <button class="preset-set" onclick="setPreset(${i},${n})">set</button>
+            </div>`).join('')}
+            <div class="preset-slot preset-zero">
+              <button class="preset-call" id="pre-${i}-0" onclick="callPreset(${i},0)" title="Call preset 0 (key 0)">0</button>
+              <button class="preset-set" onclick="setPreset(${i},0)">set</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1121,6 +1146,20 @@ function ptzCmd(i, cmd) { const spd = $(`ptz-spd-${i}`)?.value || 8; window.ptz.
 function zoomCmd(i, dir) { window.ptz.zoom(cams[i].ip, dir, 3, getAuth(i)); }
 function focusCmd(i, cmd) { window.ptz.focus(cams[i].ip, cmd, getAuth(i)); }
 function setFocusMode(i, val) { window.ptz.setImageValue(cams[i].ip, 'focusmode', val, getAuth(i)); cams[i].cfg.focus_mode = Number(val); }
+
+// ── Presets ──────────────────────────────────────────────────────────────────
+async function callPreset(i, n) {
+  const r = await window.ptz.presetCall(cams[i].ip, n, getAuth(i));
+  const btn = $(`pre-${i}-${n}`);
+  if (btn) { btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 300); }
+  if (!r.success) toast(`Preset ${n} failed: ${r.error}`, 'err');
+}
+
+async function setPreset(i, n) {
+  const r = await window.ptz.presetSet(cams[i].ip, n, getAuth(i));
+  if (r.success) toast(`Preset ${n} saved`, 'ok');
+  else toast(`Set preset ${n} failed: ${r.error}`, 'err');
+}
 
 // ── Per-camera setting changes (G3 API: post_image_value) ────────────────────
 // Maps UI/cfg key names → G3 API parameter names for writing
@@ -1801,6 +1840,16 @@ function toast(msg, type='') {
 document.addEventListener('keydown', (e) => {
   if (expandedIdx < 0 || !cams[expandedIdx]?.on) return;
   if (e.repeat || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+  // Numpad or digit keys 0-9 → call preset
+  const numpadMatch = e.code.match(/^Numpad(\d)$/);
+  const digitKey = /^[0-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey;
+  if (numpadMatch || digitKey) {
+    e.preventDefault();
+    callPreset(expandedIdx, Number(numpadMatch ? numpadMatch[1] : e.key));
+    return;
+  }
+
   let cmd = null;
   let zCmd = null;
   let fCmd = null;

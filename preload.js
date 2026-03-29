@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('ptz', {
   setNetworkParam:  (ip, p, auth) => ipcRenderer.invoke('camera:setNetworkParam', ip, p, auth),
   setIRChannel:     (ip, ch, auth) => ipcRenderer.invoke('camera:setIRChannel', ip, ch, auth),
   reboot:           (ip, auth) => ipcRenderer.invoke('camera:reboot', ip, auth),
+  presetCall:       (ip, preset, auth) => ipcRenderer.invoke('camera:presetCall', ip, preset, auth),
+  presetSet:        (ip, preset, auth) => ipcRenderer.invoke('camera:presetSet', ip, preset, auth),
   visca:            (ip, cmd, port) => ipcRenderer.invoke('camera:visca', ip, cmd, port),
   discover:         () => ipcRenderer.invoke('camera:discover')
 });

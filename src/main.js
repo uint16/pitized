@@ -697,6 +697,23 @@ ipcMain.handle('camera:reboot', async (_, ip, auth = null) => {
   } catch (err) { return { success: false, error: err.message }; }
 });
 
+/* ── Presets ──────────────────────────────────────────────────────────────── */
+ipcMain.handle('camera:presetCall', async (_, ip, preset, auth = null) => {
+  try {
+    if (ip === 'mock') return { success: true };
+    await httpGet(ip, `/cgi-bin/ptzctrl.cgi?ptzcmd&poscall&${preset}`, 4000, auth);
+    return { success: true };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+ipcMain.handle('camera:presetSet', async (_, ip, preset, auth = null) => {
+  try {
+    if (ip === 'mock') return { success: true };
+    await httpGet(ip, `/cgi-bin/ptzctrl.cgi?ptzcmd&posset&${preset}`, 4000, auth);
+    return { success: true };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
 /* ── VISCA ────────────────────────────────────────────────────────────────── */
 ipcMain.handle('camera:visca', async (_, ip, hexCmd, port = 1259) => {
   return new Promise(resolve => {
