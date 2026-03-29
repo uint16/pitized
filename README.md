@@ -27,6 +27,7 @@ Light and dark themes included — toggle with the theme button in the header.
 - Focus control (auto/manual, near/far)
 - Home position and presets
 - OSD navigation
+- Presets set and call
 
 ### AI Subject Tracking
 - Two ML model options: **COCO-SSD** (bounding box) and **MoveNet** (pose estimation)
