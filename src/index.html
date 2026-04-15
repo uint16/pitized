@@ -398,10 +398,13 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15)}
           <select id="s-exp"><option value="0">Auto</option><option value="3">Manual</option><option value="10">Shutter Priority</option><option value="11">Iris Priority</option></select></div>
         <div class="cg"><div class="cg-head"><span class="cg-label">Gain</span><span class="cg-val" id="s-gain-v">0</span></div><input type="range" id="s-gain" min="0" max="7" value="0" oninput="$('s-gain-v').textContent=this.value"></div>
         <div class="cg"><div class="cg-head"><span class="cg-label">Gain Limit</span><span class="cg-val" id="s-gainlimit-v">15</span></div><input type="range" id="s-gainlimit" min="0" max="15" value="15" oninput="$('s-gainlimit-v').textContent=this.value"></div>
-        <div class="cg"><div class="cg-head"><span class="cg-label">Iris</span><span class="cg-val" id="s-iris-v">0</span></div><input type="range" id="s-iris" min="0" max="17" value="0" oninput="$('s-iris-v').textContent=this.value"></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Iris</span></div>
+          <select id="s-iris"><option value="0">0</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option></select></div>
         <div class="cg"><div class="cg-head"><span class="cg-label">Shutter</span><span class="cg-val" id="s-shutter-v">1</span></div><input type="range" id="s-shutter" min="1" max="17" value="1" oninput="$('s-shutter-v').textContent=this.value"></div>
         <div class="cg"><div class="cg-head"><span class="cg-label">Backlight</span></div>
           <select id="s-bl"><option value="3">Off</option><option value="2">On</option></select></div>
+        <div class="cg"><div class="cg-head"><span class="cg-label">Anti-Flicker</span></div>
+          <select id="s-af"><option value="0">Off</option><option value="1">50Hz</option><option value="2">60Hz</option></select></div>
         <div class="cg"><div class="cg-head"><span class="cg-label">DRC</span><span class="cg-val" id="s-drc-v">0</span></div><input type="range" id="s-drc" min="0" max="8" value="0" oninput="$('s-drc-v').textContent=this.value"></div>
       </div>
       <div class="sb-section" style="border-bottom:none">
@@ -744,7 +747,8 @@ function renderExpanded(c, i) {
         <div style="display:flex;flex-direction:column;gap:6px">
           ${mkSlider(i,'Gain','gain',0,7,cfg.gain??0,'exp')}
           ${mkSlider(i,'Gain Limit','gainLimit',0,15,cfg.gainLimit??15,'exp')}
-          ${mkSlider(i,'Iris','iris',0,17,cfg.iris??0,'exp')}
+          <div class="ic-group"><div class="ic-head"><span class="ic-label">Iris</span></div>
+            <select id="c${i}-iris" onchange="setCamExp(${i},'iris',this.value)">${[0,6,7,8,9,10,11,12,13,14,15,16,17].map(v=>`<option value="${v}" ${(cfg.iris??0)==v?'selected':''}>${v}</option>`).join('')}</select></div>
           ${mkSlider(i,'Shutter','shutter',1,17,cfg.shutter??1,'exp')}
           ${mkSlider(i,'DRC','drc',0,8,cfg.drc??0,'exp')}
         </div>
@@ -1203,7 +1207,7 @@ function syncExpandedPanel(i) {
   // Sliders: value + display label
   const sliderParams = [
     'rgaintuning','bgaintuning','saturation','bright','contrast',
-    'hue','sharpness','gain','gainLimit','iris','shutter','drc','nr2d'
+    'hue','sharpness','gain','gainLimit','shutter','drc','nr2d'
   ];
   for (const p of sliderParams) {
     if (cfg[p] === undefined) continue;
@@ -1218,6 +1222,7 @@ function syncExpandedPanel(i) {
   setSelect(`sel-exp-${i}`,   cfg.exposure_mode);
   setSelect(`sel-bl-${i}`,    cfg.backlight);
   setSelect(`sel-af-${i}`,    cfg.anti_flicker);
+  setSelect(`c${i}-iris`,     cfg.iris);
   setSelect(`sel-focus-${i}`, cfg.focus_mode);
 }
 
@@ -1808,15 +1813,15 @@ async function syncSelected() {
   const expParams = {
     aemode: $('s-exp').value, gain: $('s-gain').value, gainLimit: $('s-gainlimit').value,
     backlight: $('s-bl').value, iris: $('s-iris').value, shutter: $('s-shutter').value,
-    drc: $('s-drc').value
+    antiflicker: $('s-af').value, drc: $('s-drc').value
   };
 
   let ok = 0;
   for (let i = 0; i < cams.length; i++) {
     const c = cams[i];
-    // Only sync to connected targets (not source unless also target)
+    // Only sync to connected targets (not the source camera)
     if (!c.on) continue;
-    if (i === srcIdx || c.syncTarget) {
+    if (c.syncTarget) {
       const r = await window.ptz.syncAll(c.ip, imgParams, expParams, {}, getAuth(i));
       if (r.success) ok++;
     }
