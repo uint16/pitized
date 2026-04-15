@@ -2,28 +2,52 @@
   "name": "pitized",
   "version": "1.0.5",
   "description": "PiTiZed Camera Color & White Balance Sync",
-  "main": "src/main.js",
+  "main": "dist/main/index.js",
   "scripts": {
-    "start": "electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "build": "tsc",
+    "start": "npm run build && electron .",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder"
   },
   "build": {
     "appId": "com.pitized.app",
     "productName": "PiTiZed",
+    "files": [
+      "dist/main/**",
+      "src/index.html",
+      "vendor/**"
+    ],
     "mac": {
       "category": "public.app-category.utilities",
       "identity": null,
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] },
-        { "target": "zip", "arch": ["x64", "arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ]
     },
-    "win": { "target": "nsis" },
-    "linux": { "target": "AppImage" }
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   },
   "devDependencies": {
+    "@types/node": "^25.6.0",
     "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "typescript": "^6.0.2"
   }
 }

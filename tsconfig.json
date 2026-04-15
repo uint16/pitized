@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "rootDir": "src/main",
+    "outDir": "dist/main",
+    "module": "commonjs",
+    "target": "es2022",
+    "types": ["node"],
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "strict": true,
+    "verbatimModuleSyntax": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/main/**/*"]
+}

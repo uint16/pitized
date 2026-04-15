@@ -617,6 +617,10 @@ function renderExpanded(c, i) {
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
               Snap
             </button>
+            <button class="vf-action-btn" id="cfg-refresh-btn-${i}" onclick="refreshCameraConfig(${i})" title="Read current settings from camera">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 22v-6h6"/><path d="M3 11.5a9 9 0 0 1 16.5-4M21 12.5a9 9 0 0 1-16.5 4"/></svg>
+              Refresh
+            </button>
           </div>
         </div>
       </div>
@@ -652,7 +656,7 @@ function renderExpanded(c, i) {
         <div class="ctrl-section">
           <div class="ctrl-title"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> Focus</div>
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-            <select class="btn btn-xs" style="border:1px solid var(--border-1);padding:3px 7px" onchange="setFocusMode(${i},this.value)">
+            <select id="sel-focus-${i}" class="btn btn-xs" style="border:1px solid var(--border-1);padding:3px 7px" onchange="setFocusMode(${i},this.value)">
               <option value="2" ${cfg.focus_mode==2?'selected':''}>Auto</option>
               <option value="3" ${cfg.focus_mode==3?'selected':''}>Manual</option>
             </select>
@@ -715,7 +719,7 @@ function renderExpanded(c, i) {
       <div class="img-controls">
         <div class="ic-section">White Balance</div>
         <div class="ic-group"><div class="ic-head"><span class="ic-label">WB Mode</span></div>
-          <select onchange="setCamImg(${i},'wb_mode',this.value)">${wbModes.map(m=>`<option value="${m.v}" ${cfg.wb_mode==m.v?'selected':''}>${m.n}</option>`).join('')}</select></div>
+          <select id="sel-wb-${i}" onchange="setCamImg(${i},'wb_mode',this.value)">${wbModes.map(m=>`<option value="${m.v}" ${cfg.wb_mode==m.v?'selected':''}>${m.n}</option>`).join('')}</select></div>
         <div style="display:flex;flex-direction:column;gap:6px">
           ${mkSlider(i,'Red Gain Tuning','rgaintuning',0,20,cfg.rgaintuning??10,'img')}
           ${mkSlider(i,'Blue Gain Tuning','bgaintuning',0,20,cfg.bgaintuning??10,'img')}
@@ -731,11 +735,11 @@ function renderExpanded(c, i) {
         <div class="ic-section">Exposure</div>
         <div style="display:flex;flex-direction:column;gap:6px">
           <div class="ic-group"><div class="ic-head"><span class="ic-label">Mode</span></div>
-            <select onchange="setCamExp(${i},'exposure_mode',this.value)">${expModes.map(m=>`<option value="${m.v}" ${cfg.exposure_mode==m.v?'selected':''}>${m.n}</option>`).join('')}</select></div>
+            <select id="sel-exp-${i}" onchange="setCamExp(${i},'exposure_mode',this.value)">${expModes.map(m=>`<option value="${m.v}" ${cfg.exposure_mode==m.v?'selected':''}>${m.n}</option>`).join('')}</select></div>
           <div class="ic-group"><div class="ic-head"><span class="ic-label">Backlight</span></div>
-            <select onchange="setCamExp(${i},'backlight',this.value)"><option value="3" ${cfg.backlight!=2?'selected':''}>Off</option><option value="2" ${cfg.backlight==2?'selected':''}>On</option></select></div>
+            <select id="sel-bl-${i}" onchange="setCamExp(${i},'backlight',this.value)"><option value="3" ${cfg.backlight!=2?'selected':''}>Off</option><option value="2" ${cfg.backlight==2?'selected':''}>On</option></select></div>
           <div class="ic-group"><div class="ic-head"><span class="ic-label">Anti-Flicker</span></div>
-            <select onchange="setCamExp(${i},'anti_flicker',this.value)"><option value="0" ${cfg.anti_flicker==0?'selected':''}>Off</option><option value="1" ${cfg.anti_flicker==1?'selected':''}>50Hz</option><option value="2" ${cfg.anti_flicker==2?'selected':''}>60Hz</option></select></div>
+            <select id="sel-af-${i}" onchange="setCamExp(${i},'anti_flicker',this.value)"><option value="0" ${cfg.anti_flicker==0?'selected':''}>Off</option><option value="1" ${cfg.anti_flicker==1?'selected':''}>50Hz</option><option value="2" ${cfg.anti_flicker==2?'selected':''}>60Hz</option></select></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
           ${mkSlider(i,'Gain','gain',0,7,cfg.gain??0,'exp')}
@@ -1136,7 +1140,7 @@ function toggleExpand(i) {
   if (!cams[i].on) return;
   expandedIdx = expandedIdx === i ? -1 : i;
   render();
-  if (expandedIdx === i) startSnapshot(i);
+  if (expandedIdx === i) { startSnapshot(i); syncExpandedPanel(i); }
 }
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
@@ -1152,7 +1156,6 @@ function focusCmd(i, cmd) { window.ptz.focus(cams[i].ip, cmd, getAuth(i)); }
 function setFocusMode(i, val) {
   window.ptz.setImageValue(cams[i].ip, 'focusmode', val, getAuth(i));
   cams[i].cfg.focus_mode = Number(val);
-  scheduleSettingsRefresh(i);
 }
 
 // ── Presets ──────────────────────────────────────────────────────────────────
@@ -1180,33 +1183,42 @@ const API_PARAM = {
   scene_mode:'scene', focusmode:'focusmode', colortemp:'colortemp',
   expcomp_mode:'expcomp_mode', expcomp_level:'expcomp_level', meter:'meter'
 };
-// ── Deferred settings re-read ─────────────────────────────────────────────────
-// After any write, re-read from camera 800 ms later so cams[i].cfg reflects ground
-// truth before the next render. Debounced per-camera so rapid slider changes only
-// trigger one read.
-const cfgRefreshTimers = {};
-function scheduleSettingsRefresh(i) {
-  const camId = cams[i].id;
-  if (cfgRefreshTimers[camId]) clearTimeout(cfgRefreshTimers[camId]);
-  cfgRefreshTimers[camId] = setTimeout(async () => {
-    delete cfgRefreshTimers[camId];
-    if (!cams[i]?.on) return;
-    const r = await window.ptz.getSettings(cams[i].ip, getAuth(i));
-    if (r.success) cams[i].cfg = r.config;
-  }, 800);
-}
-
 function setCamImg(i, k, v) {
   const apiKey = API_PARAM[k] || k;
   window.ptz.setImageValue(cams[i].ip, apiKey, v, getAuth(i));
   cams[i].cfg[k] = Number(v);
-  scheduleSettingsRefresh(i);
 }
 function setCamExp(i, k, v) {
   const apiKey = API_PARAM[k] || k;
   window.ptz.setImageValue(cams[i].ip, apiKey, v, getAuth(i));
   cams[i].cfg[k] = Number(v);
-  scheduleSettingsRefresh(i);
+}
+
+// ── Sync expanded panel UI from cfg ──────────────────────────────────────────
+// Updates sliders and selects in-place without re-rendering the whole panel.
+function syncExpandedPanel(i) {
+  if (expandedIdx !== i) return;
+  const cfg = cams[i].cfg;
+
+  // Sliders: value + display label
+  const sliderParams = [
+    'rgaintuning','bgaintuning','saturation','bright','contrast',
+    'hue','sharpness','gain','gainLimit','iris','shutter','drc','nr2d'
+  ];
+  for (const p of sliderParams) {
+    if (cfg[p] === undefined) continue;
+    const el = $(`c${i}-${p}`), vEl = $(`c${i}-${p}-v`);
+    if (el) el.value = cfg[p];
+    if (vEl) vEl.textContent = cfg[p];
+  }
+
+  // Selects
+  const setSelect = (id, val) => { const el = $(id); if (el && val !== undefined) el.value = val; };
+  setSelect(`sel-wb-${i}`,    cfg.wb_mode);
+  setSelect(`sel-exp-${i}`,   cfg.exposure_mode);
+  setSelect(`sel-bl-${i}`,    cfg.backlight);
+  setSelect(`sel-af-${i}`,    cfg.anti_flicker);
+  setSelect(`sel-focus-${i}`, cfg.focus_mode);
 }
 
 // ── Snapshot feed ────────────────────────────────────────────────────────────
@@ -1993,18 +2005,23 @@ updateThemeIcon(savedTheme);
 
 render();
 
-// Auto-refresh
-setInterval(async () => {
-  for (let i = 0; i < cams.length; i++) {
-    const c = cams[i];
-    if (!c.on) continue;
-    const r = await window.ptz.getSettings(c.ip, getAuth(i));
-    if (r.success) c.cfg = r.config;
-    else { c.on = false; stopSnapshot(c.id); stopTracking(c.id); toast(`Lost ${c.name}`,'err'); }
+// ── Per-camera config refresh ─────────────────────────────────────────────────
+async function refreshCameraConfig(i) {
+  const c = cams[i];
+  if (!c.on) return;
+  const btn = $(`cfg-refresh-btn-${i}`);
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  const r = await window.ptz.getSettings(c.ip, getAuth(i));
+  if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
+  if (r.success) {
+    c.cfg = r.config;
+    syncExpandedPanel(i);
+    if (i === srcIdx) loadSidebarFromCfg(c.cfg);
+    toast(`${c.name} config refreshed`, 'ok');
+  } else {
+    toast(`Refresh failed: ${r.error || 'unknown'}`, 'err');
   }
-  if (expandedIdx < 0) render();
-  else { renderSyncTargets(); updateGlobals(); }
-}, 12000);
+}
 </script>
 </body>
 </html>
